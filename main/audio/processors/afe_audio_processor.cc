@@ -6,7 +6,7 @@
 #define TAG "AfeAudioProcessor"
 
 AfeAudioProcessor::AfeAudioProcessor()
-    : afe_data_(nullptr) {
+    : afe_data_(nullptr), is_speaking_(false), aec_enabled_(false) {
     event_group_ = xEventGroupCreate();
 }
 
@@ -173,15 +173,18 @@ void AfeAudioProcessor::AudioProcessorTask() {
 }
 
 void AfeAudioProcessor::EnableDeviceAec(bool enable) {
+    aec_enabled_ = enable;
     if (enable) {
 #if CONFIG_USE_DEVICE_AEC
         afe_iface_->disable_vad(afe_data_);
         afe_iface_->enable_aec(afe_data_);
+        ESP_LOGI(TAG, "AEC enabled - sending all audio to server for ElevenLabs VAD interruption detection");
 #else
         ESP_LOGE(TAG, "Device AEC is not supported");
 #endif
     } else {
         afe_iface_->disable_aec(afe_data_);
         afe_iface_->enable_vad(afe_data_);
+        ESP_LOGI(TAG, "AEC disabled, hardware VAD enabled for bandwidth saving");
     }
 }
