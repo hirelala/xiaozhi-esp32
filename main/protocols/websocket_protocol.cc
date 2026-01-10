@@ -81,7 +81,11 @@ void WebsocketProtocol::CloseAudioChannel() {
 
 bool WebsocketProtocol::OpenAudioChannel() {
     Settings settings("websocket", false);
-    std::string url = settings.GetString("url");
+#ifdef CONFIG_SKIP_OTA_CHECK
+    std::string url = CONFIG_DIRECT_WEBSOCKET_URL;
+#else
+    std::string url = settings.GetString("url", "ws://192.168.1.101:8765/v2v");
+#endif
     std::string token = settings.GetString("token");
     int version = settings.GetInt("version");
     if (version != 0) {

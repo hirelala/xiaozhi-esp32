@@ -178,7 +178,7 @@ void AfeAudioProcessor::EnableDeviceAec(bool enable) {
 #if CONFIG_USE_DEVICE_AEC
         afe_iface_->disable_vad(afe_data_);
         afe_iface_->enable_aec(afe_data_);
-        ESP_LOGI(TAG, "AEC enabled - sending all audio to server for ElevenLabs VAD interruption detection");
+        ESP_LOGI(TAG, "AEC enabled - sending all audio to server for VAD interruption detection");
 #else
         ESP_LOGE(TAG, "Device AEC is not supported");
 #endif
