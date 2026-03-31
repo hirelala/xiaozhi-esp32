@@ -390,9 +390,14 @@ void Application::Start() {
     // Check for new assets version
     CheckAssetsVersion();
 
+#ifdef CONFIG_SKIP_OTA_CHECK
+    ESP_LOGI(TAG, "OTA check skipped, using direct WebSocket connection");
+    xEventGroupSetBits(event_group_, MAIN_EVENT_CHECK_NEW_VERSION_DONE);
+#else
     // Check for new firmware version or get the MQTT broker address
     Ota ota;
     CheckNewVersion(ota);
+#endif
 
     // Initialize the protocol
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
@@ -402,6 +407,10 @@ void Application::Start() {
     mcp_server.AddCommonTools();
     mcp_server.AddUserOnlyTools();
 
+#ifdef CONFIG_SKIP_OTA_CHECK
+    ESP_LOGI(TAG, "Using WebSocket protocol with direct URL: %s", CONFIG_DIRECT_WEBSOCKET_URL);
+    protocol_ = std::make_unique<WebsocketProtocol>();
+#else
     if (ota.HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
     } else if (ota.HasWebsocketConfig()) {
@@ -410,6 +419,7 @@ void Application::Start() {
         ESP_LOGW(TAG, "No protocol specified in the OTA config, using MQTT");
         protocol_ = std::make_unique<MqttProtocol>();
     }
+#endif
 
     protocol_->OnConnected([this]() {
         DismissAlert();
@@ -454,6 +464,8 @@ void Application::Start() {
             } else if (strcmp(state->valuestring, "stop") == 0) {
                 Schedule([this]() {
                     if (device_state_ == kDeviceStateSpeaking) {
+                        // Clear audio buffers immediately to stop playback
+                        audio_service_.ResetDecoder();
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
                         } else {
@@ -533,14 +545,22 @@ void Application::Start() {
     SystemInfo::PrintHeapStats();
     SetDeviceState(kDeviceStateIdle);
 
+#ifdef CONFIG_SKIP_OTA_CHECK
+    has_server_time_ = false;
+    if (protocol_started) {
+        display->ShowNotification(Lang::Strings::VERSION);
+        display->SetChatMessage("system", "");
+        audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
+    }
+#else
     has_server_time_ = ota.HasServerTime();
     if (protocol_started) {
         std::string message = std::string(Lang::Strings::VERSION) + ota.GetCurrentVersion();
         display->ShowNotification(message.c_str());
         display->SetChatMessage("system", "");
-        // Play the success sound to indicate the device is ready
         audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
     }
+#endif
 }
 
 // Add a async task to MainLoop
@@ -708,9 +728,15 @@ void Application::SetDeviceState(DeviceState state) {
         case kDeviceStateSpeaking:
             display->SetStatus(Lang::Strings::SPEAKING);
 
-            if (listening_mode_ != kListeningModeRealtime) {
-                audio_service_.EnableVoiceProcessing(false);
-                // Only AFE wake word can be detected in speaking mode
+            // Keep voice processing enabled to support voice interruption (V2V mode)
+            // In realtime mode, voice processing must stay enabled for interruption detection
+            if (listening_mode_ == kListeningModeRealtime) {
+                if (!audio_service_.IsAudioProcessorRunning()) {
+                    audio_service_.EnableVoiceProcessing(true);
+                    audio_service_.EnableWakeWordDetection(false);
+                }
+            } else {
+                // In non-realtime modes, only AFE wake word can be detected in speaking mode
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
             }
             audio_service_.ResetDecoder();

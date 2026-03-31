@@ -1,10 +1,25 @@
 menu "Xiaozhi Assistant"
 
+config SKIP_OTA_CHECK
+    bool "Skip OTA check and connect directly to WebSocket"
+    default n
+    help
+        Skip the OTA version check and connect directly to the WebSocket server.
+        This is useful for V2V mode where you want to connect to a LiveKit proxy.
+
+config DIRECT_WEBSOCKET_URL
+    string "Direct WebSocket URL"
+    default "ws://192.168.1.101:8765/v2v"
+    depends on SKIP_OTA_CHECK
+    help
+        The WebSocket URL to connect to directly when OTA check is skipped.
+
 config OTA_URL
     string "Default OTA URL"
     default "https://api.tenclass.net/xiaozhi/ota/"
     help
         The application will access this URL to check for new firmwares and server address.
+        (Not used when SKIP_OTA_CHECK is enabled)
 
 choice
     prompt "Flash Assets"
